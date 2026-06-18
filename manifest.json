@@ -1,0 +1,21 @@
+{
+  "short_name": "TeacherMetro",
+  "name": "Teacher Voice Metronome",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://via.placeholder.com/512",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#121214",
+  "theme_color": "#00fff0",
+  "display": "standalone",
+  "orientation": "portrait"
+}
