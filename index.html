@@ -90,7 +90,7 @@
             width: 140px;
             height: 140px;
             border-radius: 50%;
-            margin: 25px auto;
+            margin: 20px auto;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -112,7 +112,7 @@
         }
 
         .control-group {
-            margin: 25px 0;
+            margin: 20px 0;
             text-align: left;
         }
 
@@ -123,7 +123,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .bpm-input-wrapper {
@@ -197,8 +197,8 @@
             background: transparent;
             color: var(--text-muted);
             border: none;
-            padding: 12px 0;
-            font-size: 15px;
+            padding: 10px 0;
+            font-size: 14px;
             font-weight: 600;
             border-radius: 10px;
             cursor: pointer;
@@ -261,13 +261,13 @@
                 border-bottom: none;
                 border-left: none;
                 border-right: none;
-                padding: 30px 20px;
+                padding: 25px 20px;
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between;
             }
             .visualizer-outer {
-                margin: 10px auto;
+                margin: 5px auto;
             }
             #start-btn {
                 margin-bottom: 20px;
@@ -298,6 +298,14 @@
                 </div>
             </label>
             <input type="range" id="bpm" min="40" max="218" value="120">
+        </div>
+
+        <div class="control-group">
+            <label>Sound Type</label>
+            <div class="time-picker" id="sound-picker">
+                <button class="time-btn active" data-sound="voice">Voice</button>
+                <button class="time-btn" data-sound="click">Click</button>
+            </div>
         </div>
 
         <div class="control-group">
