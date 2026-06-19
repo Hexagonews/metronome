@@ -6,7 +6,7 @@ let bpm = 120;
 let beatsPerMeasure = 4;
 let nextNoteTime = 0.0;
 const lookahead = 25.0;
-const scheduleAheadTime = 0.2; 
+const scheduleAheadTime = 0.2; // Gives mobile browsers a comfortable processing window
 let timerID = null;
 let activeSources = []; 
 let isAudioLoaded = false;
@@ -16,6 +16,7 @@ const startBtn = document.getElementById('start-btn');
 const bpmInput = document.getElementById('bpm');
 const bpmVal = document.getElementById('bpm-val');
 
+// Keep button visually clean right away
 startBtn.textContent = "Start"; 
 
 async function loadSound(name, url) {
@@ -27,23 +28,27 @@ async function loadSound(name, url) {
 }
 
 async function initAudio() {
+    // Safely clear out any lingering broken context loops
     if (audioCtx) {
         try { await audioCtx.close(); } catch(e) {}
     }
 
+    // 1. Create the AudioContext immediately on user tap
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // MOBILE SILENCE UNLOCK SHIELD
+    // 2. MOBILE SILENCE UNLOCK SHIELD
+    // Force-play an instantaneous silent note right now.
+    // This permanently satisfies the mobile browser security check.
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime); 
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // 100% silent
     oscillator.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     oscillator.start(0);
     oscillator.stop(0.01); 
 
     startBtn.textContent = "Loading...";
-    startBtn.disabled = true; 
+    startBtn.disabled = true; // Prevents double-clicking bugs while downloading files
     
     try {
         await Promise.all([
@@ -69,6 +74,17 @@ async function initAudio() {
 
 // Synthesizes a clean woodblock metronome click out of raw audio waves
 function playSyntheticClick(beatNumber, time) {
+    // Clean up the previously scheduled sound frame first to prevent overlapping clicks
+    activeSources.forEach(item => {
+        try {
+            item.gainNode.gain.setValueAtTime(item.gainNode.gain.value, time);
+            item.gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+            item.source.stop(time + 0.06);
+        } catch(e) {}
+    });
+    activeSources = [];
+
+    // Create the oscillator (synthetic wave generator)
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     
@@ -82,19 +98,21 @@ function playSyntheticClick(beatNumber, time) {
         osc.frequency.setValueAtTime(600, time);  // 600Hz (subdued click)
     }
     
-    // Create an instantaneous snap/envelope volume drop
+    // Create an instantaneous volume envelope snap
     gainNode.gain.setValueAtTime(0.6, time);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
     
     osc.start(time);
-    osc.stop(time + 0.06);
+    osc.stop(time + 0.05);
     
+    // Track this source so the metronome can clean it up or stop it at any moment
     activeSources.push({ source: osc, gainNode: gainNode });
 }
 
 function playVoice(beatNumber, time) {
     if (!audioBuffers[beatNumber]) return;
 
+    // Cross-fade trailing overlaps to completely remove audio cut-off clicks
     activeSources.forEach(item => {
         try {
             item.gainNode.gain.setValueAtTime(item.gainNode.gain.value, time);
@@ -119,6 +137,7 @@ function nextNote() {
     const secondsPerBeat = 60.0 / bpm;
     nextNoteTime += secondsPerBeat;
     
+    // Safety check to keep clock from drifting and trapping the browser loop
     if (nextNoteTime < audioCtx.currentTime) {
         nextNoteTime = audioCtx.currentTime;
     }
@@ -161,7 +180,7 @@ function scheduler() {
 }
 
 function start() {
-    if (isPlaying) return; 
+    if (isPlaying) return; // Disallow duplicate engine cycles
 
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -176,11 +195,13 @@ function start() {
 
 function stop() {
     isPlaying = false;
+    
     if (timerID) {
         clearTimeout(timerID);
         timerID = null;
     }
 
+    // Force clear and cut audio loops immediately
     activeSources.forEach(item => {
         try {
             item.source.stop();
@@ -193,7 +214,7 @@ function stop() {
     startBtn.classList.remove('playing');
 }
 
-// UI Listeners
+// Global UI Listeners
 startBtn.addEventListener('click', () => {
     if (!isAudioLoaded) {
         initAudio();
@@ -212,6 +233,7 @@ bpmVal.addEventListener('input', (e) => {
     if (isNaN(value)) return; 
     if (value < 40) value = 40;
     if (value > 218) value = 218;
+
     bpm = value;
     bpmInput.value = bpm;
 });
