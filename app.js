@@ -6,16 +6,16 @@ let bpm = 120;
 let beatsPerMeasure = 4;
 let nextNoteTime = 0.0;
 const lookahead = 25.0;
-const scheduleAheadTime = 0.2; // Gives mobile browsers a comfortable processing window
+const scheduleAheadTime = 0.2; 
 let timerID = null;
 let activeSources = []; 
 let isAudioLoaded = false;
+let currentSoundType = 'voice'; // Tracks 'voice' or 'click'
 
 const startBtn = document.getElementById('start-btn');
 const bpmInput = document.getElementById('bpm');
 const bpmVal = document.getElementById('bpm-val');
 
-// Keep button visually clean right away
 startBtn.textContent = "Start"; 
 
 async function loadSound(name, url) {
@@ -27,30 +27,25 @@ async function loadSound(name, url) {
 }
 
 async function initAudio() {
-    // Safely clear out any lingering broken context loops
     if (audioCtx) {
         try { await audioCtx.close(); } catch(e) {}
     }
 
-    // 1. Create the AudioContext immediately on user tap
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // 2. MOBILE SILENCE UNLOCK SHIELD
-    // Force-play an instantaneous silent note right now.
-    // This permanently satisfies the mobile browser security check.
+    // MOBILE SILENCE UNLOCK SHIELD
     const oscillator = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-    gainNode.gain.setValueAtTime(0, audioCtx.currentTime); // 100% silent
+    gainNode.gain.setValueAtTime(0, audioCtx.currentTime); 
     oscillator.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     oscillator.start(0);
     oscillator.stop(0.01); 
 
     startBtn.textContent = "Loading...";
-    startBtn.disabled = true; // Prevents double-clicking bugs while downloading files
+    startBtn.disabled = true; 
     
     try {
-        // NOTE: If you converted files to .wav, change '.mp3' to '.wav' here!
         await Promise.all([
             loadSound('1', '1.mp3'),
             loadSound('2', '2.mp3'),
@@ -63,21 +58,43 @@ async function initAudio() {
         start();
     } catch (error) {
         console.error("Audio initialization failed:", error);
-        alert("Metronome couldn't load your audio files! Double-check that 1.mp3, 2.mp3, 3.mp3, and 4.mp3 are in your root folder and named correctly.");
+        alert("Metronome couldn't load voice files! You can still use 'Click' mode if files are missing.");
         
-        // Reset button state on error so it doesn't stay greyed out
-        isAudioLoaded = false;
-        isPlaying = false;
-        startBtn.textContent = "Start";
+        // Safety fallback: allow click track even if download fails
+        isAudioLoaded = true; 
         startBtn.disabled = false;
-        startBtn.classList.remove('playing');
+        startBtn.textContent = "Start";
     }
+}
+
+// Synthesizes a clean woodblock metronome click out of raw audio waves
+function playSyntheticClick(beatNumber, time) {
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    
+    // High pitch beep on beat 1, slightly lower on beats 2, 3, 4
+    if (beatNumber === 1) {
+        osc.frequency.setValueAtTime(1000, time); // 1000Hz (sharp accent)
+    } else {
+        osc.frequency.setValueAtTime(600, time);  // 600Hz (subdued click)
+    }
+    
+    // Create an instantaneous snap/envelope volume drop
+    gainNode.gain.setValueAtTime(0.6, time);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    
+    osc.start(time);
+    osc.stop(time + 0.06);
+    
+    activeSources.push({ source: osc, gainNode: gainNode });
 }
 
 function playVoice(beatNumber, time) {
     if (!audioBuffers[beatNumber]) return;
 
-    // Cross-fade trailing overlaps to completely remove audio cut-off clicks
     activeSources.forEach(item => {
         try {
             item.gainNode.gain.setValueAtTime(item.gainNode.gain.value, time);
@@ -102,7 +119,6 @@ function nextNote() {
     const secondsPerBeat = 60.0 / bpm;
     nextNoteTime += secondsPerBeat;
     
-    // Safety check to keep clock from drifting and trapping the browser loop
     if (nextNoteTime < audioCtx.currentTime) {
         nextNoteTime = audioCtx.currentTime;
     }
@@ -114,7 +130,11 @@ function nextNote() {
 }
 
 function scheduleNote(beatNumber, time) {
-    playVoice(beatNumber, time);
+    if (currentSoundType === 'voice') {
+        playVoice(beatNumber, time);
+    } else {
+        playSyntheticClick(beatNumber, time);
+    }
     
     setTimeout(() => {
         if (isPlaying) {
@@ -141,7 +161,7 @@ function scheduler() {
 }
 
 function start() {
-    if (isPlaying) return; // Disallow duplicate engine cycles
+    if (isPlaying) return; 
 
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -156,13 +176,11 @@ function start() {
 
 function stop() {
     isPlaying = false;
-    
     if (timerID) {
         clearTimeout(timerID);
         timerID = null;
     }
 
-    // Force clear and cut audio loops immediately
     activeSources.forEach(item => {
         try {
             item.source.stop();
@@ -175,7 +193,7 @@ function stop() {
     startBtn.classList.remove('playing');
 }
 
-// Global UI Listeners
+// UI Listeners
 startBtn.addEventListener('click', () => {
     if (!isAudioLoaded) {
         initAudio();
@@ -194,7 +212,6 @@ bpmVal.addEventListener('input', (e) => {
     if (isNaN(value)) return; 
     if (value < 40) value = 40;
     if (value > 218) value = 218;
-
     bpm = value;
     bpmInput.value = bpm;
 });
@@ -209,9 +226,18 @@ bpmVal.addEventListener('blur', (e) => {
     bpmInput.value = bpm;
 });
 
-document.querySelectorAll('.time-btn').forEach(button => {
+// Sound Type Selection Logic
+document.querySelectorAll('#sound-picker .time-btn').forEach(button => {
     button.addEventListener('click', (e) => {
-        document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('#sound-picker .time-btn').forEach(btn => btn.classList.remove('active'));
+        e.target.classList.add('active');
+        currentSoundType = e.target.getAttribute('data-sound');
+    });
+});
+
+document.querySelectorAll('.time-picker:not(#sound-picker) .time-btn').forEach(button => {
+    button.addEventListener('click', (e) => {
+        document.querySelectorAll('.time-picker:not(#sound-picker) .time-btn').forEach(btn => btn.classList.remove('active'));
         e.target.classList.add('active');
         beatsPerMeasure = parseInt(e.target.getAttribute('data-value'));
         if (isAudioLoaded) stop(); 
